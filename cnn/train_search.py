@@ -4,6 +4,7 @@ import time
 import glob
 import numpy as np
 import torch
+import pickle
 import utils
 import logging
 import argparse
@@ -105,6 +106,8 @@ def main():
 
   architect = Architect(model, args)
 
+  alpha_values = []
+
   for epoch in range(args.epochs):
     scheduler.step()
     lr = scheduler.get_lr()[0]
@@ -115,6 +118,7 @@ def main():
 
     print(F.softmax(model.alphas_normal, dim=-1))
     print(F.softmax(model.alphas_reduce, dim=-1))
+    alpha_values.append([model.alphas_normal, model.alphas_reduce])
 
     # training
     train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
@@ -125,6 +129,9 @@ def main():
     logging.info('valid_acc %f', valid_acc)
 
     utils.save(model, os.path.join(args.save, 'weights.pt'))
+
+  with open('alpha.pkl', 'wb') as f:
+    pickle.dump(alpha_values, f)
 
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
@@ -191,5 +198,5 @@ def infer(valid_queue, model, criterion):
 
 
 if __name__ == '__main__':
-  main() 
+  main()
 
