@@ -5,6 +5,7 @@ from operations import *
 from torch.autograd import Variable
 from genotypes import PRIMITIVES
 from genotypes import Genotype
+from itertools import combinations
 
 
 class MixedOp(nn.Module):
@@ -44,14 +45,33 @@ class Cell(nn.Module):
         op = MixedOp(C, stride)
         self._ops.append(op)
 
+  def _pixel_wise_dot_product(self, a, b):
+    batch, img_h, img_w, img_c = a.shape
+    a = a.reshape(batch*img_h*img_w, img_c)
+    b = b.reshape(img_c, batch*img_h*img_w)
+    return torch.sum(torch.mm(a, b))
+
+  def _cross_apply(self, volumes, apply_op):
+    sums = []
+    for a, b in combinations(volumes, 2):
+      sums.append(apply_op(a, b))
+    sum(sums)
+    return sums
+
   def forward(self, s0, s1, weights):
     s0 = self.preprocess0(s0)
     s1 = self.preprocess1(s1)
 
     states = [s0, s1]
     offset = 0
+    # TODO test reg term
+    reg_term = 0
     for i in range(self._steps):
-      s = sum(self._ops[offset+j](h, weights[offset+j]) for j, h in enumerate(states))
+      output_volumes = []
+      for j, h in enumerate(states):
+        output_volumes.append(self._ops[offset+j](h, weights[offset+j]))
+      reg_term += self._cross_apply(reg_term, self._pixel_wise_dot_product)
+      s = sum(output_volumes)
       offset += len(states)
       states.append(s)
 
